@@ -1,0 +1,131 @@
+首先，Debian 无论是哪个系统，默认往往都没有 linux-headers 内核，而安装使用 WireGuard 必须要这货，所以我们需要先安装：
+
+# 更新软件包源
+apt update
+# 安装和 linux-image 内核版本相对于的 linux-headers 内核
+apt install linux-headers-$(uname -r) -y
+# 以下为示例内容（仅供参考）
+ 
+# Debian8 安装前内核列表(空)
+root@doubi:~# dpkg -l|grep linux-headers
+# 空，没有任何输出
+ 
+# Debian8 安装后内核列表（注意这里的版本号 可能不一样）
+root@doubi:~# dpkg -l|grep linux-headers
+ii  linux-headers-3.16.0-6-amd64   3.16.57-2                          amd64        Header files for Linux 3.16.0-6-amd64
+ii  linux-headers-3.16.0-6-common  3.16.57-2   
+ 
+ 
+# Debian9 安装前内核列表(空)
+root@doubi:~# dpkg -l|grep linux-headers
+# 空，没有任何输出
+ 
+# Debian9 安装后内核列表（注意这里的版本号 可能不一样）
+root@doubi:~# dpkg -l|grep linux-headers
+ii  linux-headers-4.9.0-7-amd64   4.9.110-3+deb9u2               amd64        Header files for Linux 4.9.0-7-amd64
+ii  linux-headers-4.9.0-7-common  4.9.110-3+deb9u2               all          Common header files for Linux 4.9.0-7
+ 
+# 以上为示例内容（仅供参考）
+安装WireGuard
+然后我们就可以开始安装 WireGuard 了。
+
+# 添加 unstable 软件包源，以确保安装版本是最新的
+echo "deb http://deb.debian.org/debian/ unstable main" > /etc/apt/sources.list.d/unstable.list
+echo -e 'Package: *\nPin: release a=unstable\nPin-Priority: 150' > /etc/apt/preferences.d/limit-unstable
+ 
+# 更新一下软件包源
+apt update
+ 
+# 开始安装 WireGuard ，resolvconf 是用来指定DNS的，旧一些的系统可能没装。
+apt install wireguard resolvconf -y
+生成密匙对
+当你确定安装成功后，就要开始配置服务端和客户端的配置文件了。放心，这很简单。
+
+# 首先进入配置文件目录，如果该目录不存在请先手动创建：mkdir /etc/wireguard
+cd /etc/wireguard
+ 
+# 然后开始生成 密匙对(公匙+私匙)。
+wg genkey | tee sprivatekey | wg pubkey > spublickey
+wg genkey | tee cprivatekey | wg pubkey > cpublickey
+查看主网卡名称
+先查看一下你的主网卡名是什么：
+
+ip addr
+# 执行命令后，示例如下（仅供参考），lo 是本地环回 忽略，eth0 就是主网卡名了。
+# 写着你的服务器外网IP的(下面 X.X.X.X 处)，就是你的主网卡，NAT的服务器则是显示内网IP。
+# 如果你拿不准哪个网卡是主网卡，请留言询问。
+ 
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 00:16:3c:cf:89:73 brd ff:ff:ff:ff:ff:ff
+    inet X.X.X.X/25 brd 255.255.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+生成服务端配置文件
+如需要添加多个用户，请看教程：WireGuard —— 多用户配置教程
+
+接下来就开始生成服务端配置文件：
+
+# 井号开头的是注释说明，用该命令执行后会自动过滤注释文字。
+# 下面加粗的这一大段都是一个代码！请把下面几行全部复制，然后粘贴到 SSH软件中执行，不要一行一行执行！
+ 
+echo "[Interface]
+# 服务器的私匙，对应客户端配置中的公匙（自动读取上面刚刚生成的密匙内容）
+PrivateKey = $(cat sprivatekey)
+# 本机的内网IP地址，一般默认即可，除非和你服务器或客户端设备本地网段冲突
+Address = 10.0.0.1/24 
+# 运行 WireGuard 时要执行的 iptables 防火墙规则，用于打开NAT转发之类的。
+# 如果你的服务器主网卡名称不是 eth0 ，那么请修改下面防火墙规则中最后的 eth0 为你的主网卡名称。
+PostUp   = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+# 停止 WireGuard 时要执行的 iptables 防火墙规则，用于关闭NAT转发之类的。
+# 如果你的服务器主网卡名称不是 eth0 ，那么请修改下面防火墙规则中最后的 eth0 为你的主网卡名称。
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+# 服务端监听端口，可以自行修改
+ListenPort = 443
+# 服务端请求域名解析 DNS
+DNS = 8.8.8.8
+# 保持默认
+MTU = 1420
+# [Peer] 代表客户端配置，每增加一段 [Peer] 就是增加一个客户端账号，具体我稍后会写多用户教程。
+[Peer]
+# 该客户端账号的公匙，对应客户端配置中的私匙（自动读取上面刚刚生成的密匙内容）
+PublicKey = $(cat cpublickey)
+# 该客户端账号的内网IP地址
+AllowedIPs = 10.0.0.2/32"|sed '/^#/d;/^\s*$/d' > wg0.conf
+ 
+# 上面加粗的这一大段都是一个代码！请把下面几行全部复制，然后粘贴到 SSH软件中执行，不要一行一行执行！
+生成客户端配置文件
+接下来就开始生成客户端配置文件：
+
+# 井号开头的是注释说明，用该命令执行后会自动过滤注释文字。
+# 下面加粗的这一大段都是一个代码！请把下面几行全部复制，然后粘贴到 SSH软件中执行，不要一行一行执行！
+ 
+echo "[Interface]
+# 客户端的私匙，对应服务器配置中的客户端公匙（自动读取上面刚刚生成的密匙内容）
+PrivateKey = $(cat cprivatekey)
+# 客户端的内网IP地址
+Address = 10.0.0.2/24
+# 解析域名用的DNS
+DNS = 8.8.8.8
+# 保持默认
+MTU = 1420
+[Peer]
+# 服务器的公匙，对应服务器的私匙（自动读取上面刚刚生成的密匙内容）
+PublicKey = $(cat spublickey)
+# 服务器地址和端口，下面的 X.X.X.X 记得更换为你的服务器公网IP，端口请填写服务端配置时的监听端口
+Endpoint = X.X.X.X:443
+# 因为是客户端，所以这个设置为全部IP段即可
+AllowedIPs = 0.0.0.0/0, ::0/0
+# 保持连接，如果客户端或服务端是 NAT 网络(比如国内大多数家庭宽带没有公网IP，都是NAT)，那么就需要添加这个参数定时链接服务端(单位：秒)，如果你的服务器和你本地都不是 NAT 网络，那么建议不使用该参数（设置为0，或客户端配置文件中删除这行）
+PersistentKeepalive = 25"|sed '/^#/d;/^\s*$/d' > client.conf
+ 
+# 上面加粗的这一大段都是一个代码！请把下面几行全部复制，然后粘贴到 SSH软件中执行，不要一行一行执行！
+接下来你就可以将这个客户端配置文件 [/etc/wireguard/client.conf] 通过SFTP、HTTP等方式下载到本地了。
+
+不过我更推荐，SSH中打开显示配置文件内容并复制出来后，本地设备新建一个文本文件 [xxx.conf] (名称随意，后缀名需要是 .conf) 并写入其中，提供给 WireGuard 客户端读取使用。
+
+cat /etc/wireguard/client.conf
