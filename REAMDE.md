@@ -4,28 +4,6 @@
 apt update
 # 安装和 linux-image 内核版本相对于的 linux-headers 内核
 apt install linux-headers-$(uname -r) -y
-# 以下为示例内容（仅供参考）
- 
-# Debian8 安装前内核列表(空)
-root@doubi:~# dpkg -l|grep linux-headers
-# 空，没有任何输出
- 
-# Debian8 安装后内核列表（注意这里的版本号 可能不一样）
-root@doubi:~# dpkg -l|grep linux-headers
-ii  linux-headers-3.16.0-6-amd64   3.16.57-2                          amd64        Header files for Linux 3.16.0-6-amd64
-ii  linux-headers-3.16.0-6-common  3.16.57-2   
- 
- 
-# Debian9 安装前内核列表(空)
-root@doubi:~# dpkg -l|grep linux-headers
-# 空，没有任何输出
- 
-# Debian9 安装后内核列表（注意这里的版本号 可能不一样）
-root@doubi:~# dpkg -l|grep linux-headers
-ii  linux-headers-4.9.0-7-amd64   4.9.110-3+deb9u2               amd64        Header files for Linux 4.9.0-7-amd64
-ii  linux-headers-4.9.0-7-common  4.9.110-3+deb9u2               all          Common header files for Linux 4.9.0-7
- 
-# 以上为示例内容（仅供参考）
 安装WireGuard
 然后我们就可以开始安装 WireGuard 了。
 
