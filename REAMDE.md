@@ -129,3 +129,37 @@ PersistentKeepalive = 25"|sed '/^#/d;/^\s*$/d' > client.conf
 不过我更推荐，SSH中打开显示配置文件内容并复制出来后，本地设备新建一个文本文件 [xxx.conf] (名称随意，后缀名需要是 .conf) 并写入其中，提供给 WireGuard 客户端读取使用。
 
 cat /etc/wireguard/client.conf
+其他剩余其他操作：
+# 赋予配置文件夹权限
+chmod 777 -R /etc/wireguard
+ 
+# 打开防火墙转发功能
+echo 1 > /proc/sys/net/ipv4/ip_forward
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+sysctl -p
+启动WireGuard
+点击展开 查看更多
+
+wg-quick up wg0
+# 执行命令后，输出示例如下（仅供参考）
+ 
+[#] ip link add wg0 type wireguard
+[#] wg setconf wg0 /dev/fd/63
+[#] ip address add 10.0.0.1/24 dev wg0
+[#] ip link set mtu 1420 dev wg0
+[#] ip link set wg0 up
+[#] resolvconf -a tun.wg0 -m 0 -x
+[#] iptables -A FORWARD -i wg0 -j ACCEPT; iptables -A FORWARD -o wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+ 
+# 如果此处没有报错：RTNETLINK answers: Operation not supported，且输入内容差不多，那么说明启动成功了！
+停止WireGuard
+wg-quick down wg0
+查询WireGuard状态
+wg
+开机启动
+注意：Ubuntu 14.04 系统默认是没有 systemctl 的，所以无法配置开机启动。
+
+# 设置开机启动
+systemctl enable wg-quick@wg0
+# 取消开机启动
+systemctl disable wg-quick@wg0
